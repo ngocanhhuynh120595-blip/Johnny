@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Deconstructive Type — Batch Export</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#111; color:#eee; font-family: Arial, sans-serif; }
+  #ui {
+    position:fixed; top:0; left:0; right:0;
+    background:#1a1a1a; padding:18px 24px;
+    border-bottom:1px solid #333;
+    display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+    z-index:100;
+  }
+  #ui h1 { font-size:13px; letter-spacing:3px; color:#3355FF; text-transform:uppercase; margin-right:8px; }
+  #ui label { font-size:11px; color:#888; letter-spacing:1px; }
+  #ui input, #ui select {
+    background:#2a2a2a; border:1px solid #444; color:#eee;
+    padding:6px 10px; border-radius:4px; font-size:12px;
+    font-family: Arial, sans-serif;
+  }
+  #ui input[type="text"] { width:320px; }
+  button {
+    background:#3355FF; color:#fff; border:none;
+    padding:8px 20px; border-radius:4px; cursor:pointer;
+    font-size:12px; letter-spacing:1px; font-family: Arial, sans-serif;
+  }
+  button:hover { background:#1A33CC; }
+  button.secondary { background:#333; }
+  button.secondary:hover { background:#444; }
+  #status { font-size:11px; color:#888; margin-left:8px; }
+  #grid {
+    padding:100px 24px 24px;
+    display:grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap:16px;
+  }
+  .poster-wrap {
+    background:#222;
+    border-radius:8px;
+    overflow:hidden;
+    border:1px solid #333;
+  }
+  .poster-wrap canvas { display:block; width:100%; }
+  .poster-info {
+    padding:10px 14px;
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .poster-info span { font-size:11px; color:#666; letter-spacing:1px; }
+  .poster-info button { padding:5px 12px; font-size:10px; }
+</style>
+</head>
+<body>
+
+<div id="ui">
+  <h1>Deconstructive Type — Export</h1>
+  <div>
+    <label>WORDS (comma separated)</label><br>
+    <input type="text" id="wordInput" value="READ, RESIST, TYPE, NOISE, UNREAD, FORM">
+  </div>
+  <div>
+    <label>LAYOUT</label><br>
+    <select id="layoutSel">
+      <option value="-1">All layouts</option>
+      <option value="0">Chaos Grid</option>
+      <option value="1">Diagonal</option>
+      <option value="2">Explosion</option>
+      <option value="3">Stack</option>
+    </select>
+  </div>
+  <div>
+    <label>PALETTE</label><br>
+    <select id="palSel">
+      <option value="-1">All palettes</option>
+      <option value="0">Dark Industrial</option>
+      <option value="1">Risograph</option>
+      <option value="2">Concrete</option>
+      <option value="3">Night Neon</option>
+    </select>
+  </div>
+  <div>
+    <label>RESOLUTION</label><br>
+    <select id="sizeSel">
+      <option value="1240">A4 · 1240 × 1754 px (150 dpi)</option>
+      <option value="2480" selected>A4 · 2480 × 3508 px (300 dpi)</option>
+      <option value="3508">A4 · 3508 × 4961 px (420 dpi)</option>
+    </select>
+  </div>
+  <button onclick="generateAll()">GENERATE</button>
+  <button class="secondary" onclick="downloadAll()">DOWNLOAD ALL</button>
+  <span id="status"></span>
+</div>
+
+<div id="grid"></div>
+
+<script>
+// ── Palette data ──────────────────────────────────────────
+const PALETTE_SETS = [
+  { name:'Dark Industrial', bg:[20,18,24],    pal:[[220,75,65],[45,55,75],[130,130,130],[235,235,230],[75,155,105]] },
+  { name:'Risograph',       bg:[240,234,216], pal:[[200,55,45],[30,55,100],[230,185,50],[80,155,105],[40,38,42]] },
+  { name:'Concrete',        bg:[182,177,172], pal:[[38,36,40],[158,52,42],[218,213,203],[78,73,70],[200,80,65]] },
+  { name:'Night Neon',      bg:[10,8,22],     pal:[[255,55,115],[35,215,175],[218,188,255],[255,198,48],[180,100,255]] },
+];
+const LAYOUT_NAMES = ['CHAOS GRID','DIAGONAL','EXPLOSION','STACK'];
+
+let allCanvases = []; // store {canvas, filename}
+
+// ── Main generate ─────────────────────────────────────────
+function generateAll() {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  allCanvases = [];
+
+  const words = document.getElementById('wordInput').value
+    .split(',').map(w => w.trim().toUpperCase()).filter(w => w.length > 0);
+  const layoutSel = parseInt(document.getElementById('layoutSel').value);
+  const palSel    = parseInt(document.getElementById('palSel').value);
+  const sz        = parseInt(document.getElementById('sizeSel').value);
+
+  const layouts = layoutSel === -1 ? [0,1,2,3] : [layoutSel];
+  const palettes = palSel   === -1 ? [0,1,2,3] : [palSel];
+
+  let count = 0;
+  for (let word of words) {
+    for (let li of layouts) {
+      for (let pi of palettes) {
+        const seed = Math.floor(Math.random() * 99999);
+        const canvas = renderPoster(word, li, pi, sz, seed);
+        const filename = `deconstructive_${word}_${LAYOUT_NAMES[li].replace(' ','_')}_${PALETTE_SETS[pi].name.replace(' ','_')}.png`;
+
+        allCanvases.push({ canvas, filename });
+
+        // wrap in UI
+        const wrap = document.createElement('div');
+        wrap.className = 'poster-wrap';
+        wrap.appendChild(canvas);
+
+        const info = document.createElement('div');
+        info.className = 'poster-info';
+        info.innerHTML = `
+          <span>${word} · ${LAYOUT_NAMES[li]} · ${PALETTE_SETS[pi].name}</span>
+          <button onclick="downloadSingle(${allCanvases.length-1})">SAVE</button>
+        `;
+        wrap.appendChild(info);
+        grid.appendChild(wrap);
+        count++;
+      }
+    }
+  }
+
+  document.getElementById('status').textContent = `${count} posters generated`;
+}
+
+function downloadSingle(idx) {
+  const { canvas, filename } = allCanvases[idx];
+  const link = document.createElement('a');
+  link.download = filename;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+}
+
+function downloadAll() {
+  if (allCanvases.length === 0) { alert('Generate posters first.'); return; }
+  allCanvases.forEach(({ canvas, filename }, i) => {
+    setTimeout(() => {
+      const link = document.createElement('a');
+      link.download = filename;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }, i * 300);
+  });
+}
+
+// ── Renderer — A4 portrait 21×29.7 ratio ─────────────────
+// sz = width in px; height = sz × (297/210) = sz × 1.4142
+function renderPoster(word, layoutMode, pIdx, sz, seedVal) {
+  const sh = Math.round(sz * 297 / 210); // A4 height
+  const canvas = document.createElement('canvas');
+  canvas.width = sz;
+  canvas.height = sh;
+  const ctx = canvas.getContext('2d');
+
+  const { bg, pal } = PALETTE_SETS[pIdx];
+
+  // seeded random
+  let _seed = seedVal;
+  function rand(a, b) {
+    _seed = (_seed * 1664525 + 1013904223) & 0xffffffff;
+    const t = ((_seed >>> 0) / 0xffffffff);
+    if (b === undefined) return t;
+    return a + t * (b - a);
+  }
+  function randInt(n) { return Math.floor(rand(0, n)); }
+
+  // background
+  ctx.fillStyle = `rgb(${bg[0]},${bg[1]},${bg[2]})`;
+  ctx.fillRect(0, 0, sz, sh);
+
+  // label bottom
+  const labelH = sh * 0.032;
+  ctx.fillStyle = `rgba(${bg[0]+22},${bg[1]+22},${bg[2]+22},0.9)`;
+  ctx.fillRect(0, sh - labelH, sz, labelH);
+  ctx.fillStyle = `rgb(${pal[0][0]},${pal[0][1]},${pal[0][2]})`;
+  ctx.font = `${sz*0.012}px Arial`;
+  ctx.textAlign = 'left';
+  ctx.fillText(`${LAYOUT_NAMES[layoutMode]}  ·  ${PALETTE_SETS[pIdx].name}  ·  DECONSTRUCTIVE TYPE`, sz*0.02, sh - labelH*0.25);
+
+  const chars = word.split('');
+
+  // ── layout positions — uses sz (width) and sh (height) ──
+  let positions = [];
+  const n = chars.length;
+  const usableH = sh * 0.96; // leave room for label
+
+  if (layoutMode === 0) { // chaos grid
+    let cols = Math.ceil(Math.sqrt(n * 1.2)), rows = Math.ceil(n / cols);
+    let cw = sz * 0.88 / cols, ch = usableH * 0.88 / rows;
+    let base = Math.min(cw, ch) * rand(0.72, 1.1);
+    let startX = sz * 0.06 + cw * 0.5, startY = sh * 0.05 + ch * 0.5;
+    for (let i = 0; i < n; i++) {
+      let col = i % cols, row = Math.floor(i / cols);
+      positions.push({
+        x: startX + col*cw + rand(-cw*.28, cw*.28),
+        y: startY + row*ch + rand(-ch*.22, ch*.22),
+        sz: base * rand(0.55, 1.55),
+        col: pal[randInt(pal.length)]
+      });
+    }
+  } else if (layoutMode === 1) { // diagonal
+    let spacing = sz * 1.05 / Math.max(n, 1), base = Math.min(spacing * 1.3, sz * 0.17);
+    for (let i = 0; i < n; i++) {
+      let t = n > 1 ? i / (n - 1) : 0.5;
+      positions.push({
+        x: sz*0.06 + i*spacing + rand(-sz*.02, sz*.02),
+        y: sh*0.10 + t*usableH*0.80 + rand(-sh*.03, sh*.03),
+        sz: base * rand(0.45, 1.65),
+        col: pal[randInt(pal.length)]
+      });
+    }
+  } else if (layoutMode === 2) { // explosion — centre of poster
+    const cx = sz / 2, cy = usableH / 2;
+    const maxRad = Math.min(sz, usableH) * 0.38;
+    for (let i = 0; i < n; i++) {
+      let angle = (Math.PI*2) * i / n + rand(-0.4, 0.4);
+      let rad = rand(sz*0.08, maxRad);
+      positions.push({
+        x: cx + Math.cos(angle)*rad,
+        y: cy + Math.sin(angle)*rad,
+        sz: sz*0.12 * rand(0.45, 1.85),
+        col: pal[randInt(pal.length)]
+      });
+    }
+  } else { // stack
+    let cols = Math.max(1, Math.min(4, n)), cw = sz / cols;
+    let colY = Array(cols).fill(sh * 0.05);
+    for (let i = 0; i < n; i++) {
+      let col = i % cols, gsz = cw * rand(0.38, 1.28);
+      positions.push({
+        x: cw*col + cw/2 + rand(-cw*.08, cw*.08),
+        y: colY[col] + gsz * 0.55,
+        sz: gsz,
+        col: pal[randInt(pal.length)]
+      });
+      colY[col] += gsz * rand(0.82, 1.12);
+    }
+  }
+
+  // ── draw each glyph ──
+  for (let i = 0; i < chars.length; i++) {
+    drawGlyph(ctx, chars[i], positions[i], pal, bg, rand, randInt);
+  }
+
+  return canvas;
+}
+
+function drawGlyph(ctx, ch, pos, pal, bg, rand, randInt) {
+  const s = pos.sz, tk = s * 0.17;
+  const lean = rand(-0.42, 0.42);
+  const flipH = rand(0,1) > 0.84;
+  const parts = [];
+
+  function j() { return rand(-s*.09, s*.09); }
+  function v(col) {
+    col = col || pos.col;
+    return [
+      Math.min(255,Math.max(0, col[0]+rand(-28,28))),
+      Math.min(255,Math.max(0, col[1]+rand(-28,28))),
+      Math.min(255,Math.max(0, col[2]+rand(-28,28))),
+      rand(155,255)
+    ];
+  }
+  function addRect(ox,oy,w,h)      { parts.push({t:'rect',ox:ox+j(),oy:oy+j(),w,h,rot:rand(-.22,.22),col:v()}); }
+  function addCirc(ox,oy,r,col)    { parts.push({t:'circ',ox:ox+j(),oy:oy+j(),r,col:col||v()}); }
+  function addTri(ox,oy,w,h,dir)   { parts.push({t:'tri',ox:ox+j(),oy:oy+j(),w,h,dir,rot:rand(-.2,.2),col:v()}); }
+  function addArc(ox,oy,rad,a1,a2) { parts.push({t:'arc',ox:ox+j(),oy:oy+j(),r:rad,a1,a2,col:v()}); }
+  function addDiag(ox,oy,w,h,rev,sw){ parts.push({t:'diag',ox:ox+j(),oy:oy+j(),w,h,rev:!!rev,sw,col:v()}); }
+  function addBG(ox,oy,r)          { parts.push({t:'circ',ox,oy,r,col:[bg[0],bg[1],bg[2],255]}); }
+
+  const PI=Math.PI, HALF_PI=PI/2, TAU=PI*2;
+  switch(ch) {
+    case 'A': addTri(0,0,s*.72,s*.88,'up'); addRect(0,s*.12,s*.42,tk); break;
+    case 'B': addRect(-s*.2,0,tk,s*.85); addArc(-s*.02,-s*.22,s*.29,-HALF_PI,HALF_PI); addArc(-s*.02,s*.18,s*.33,-HALF_PI,HALF_PI); break;
+    case 'C': addArc(0,0,s*.4,0.65,TAU-0.65); break;
+    case 'D': addRect(-s*.2,0,tk,s*.85); addArc(0,0,s*.42,-HALF_PI,HALF_PI); break;
+    case 'E': addRect(-s*.2,0,tk,s*.85); addRect(s*.06,-s*.36,s*.42,tk); addRect(s*.04,0,s*rand(.22,.38),tk); addRect(s*.06,s*.36,s*.42,tk); break;
+    case 'F': addRect(-s*.2,0,tk,s*.85); addRect(s*.06,-s*.36,s*.4,tk); addRect(s*.04,0,s*rand(.2,.36),tk); break;
+    case 'G': addArc(0,0,s*.4,.52,TAU-.26); addRect(s*.14,s*.04,s*.2,tk); break;
+    case 'H': addRect(-s*.22,0,tk,s*.85); addRect(s*.22,0,tk,s*.85); addRect(0,rand(-s*.1,s*.1),s*.44,tk); break;
+    case 'I': addRect(0,0,tk*rand(.8,1.5),s*.85); if(rand(0,1)>.3)addRect(0,-s*.36,s*.3,tk); if(rand(0,1)>.3)addRect(0,s*.36,s*rand(.2,.38),tk); break;
+    case 'J': addRect(s*.1,-s*.12,tk,s*.7); addArc(0,s*.22,s*.24,0,PI); break;
+    case 'K': addRect(-s*.22,0,tk,s*.85); addTri(s*.05,-s*.22,s*.4,s*.44,'ru'); addTri(s*.05,s*.22,s*.4,s*.44,'rd'); break;
+    case 'L': addRect(-s*.15,0,tk,s*.85); addRect(s*.08,s*.36,s*.45,tk); break;
+    case 'M': addRect(-s*.28,0,tk,s*.85); addRect(s*.28,0,tk,s*.85); addTri(-s*.1,-s*.1,s*.28,s*.44,'rd'); addTri(s*.1,-s*.1,s*.28,s*.44,'ld'); break;
+    case 'N': addRect(-s*.22,0,tk,s*.85); addRect(s*.22,0,tk,s*.85); addDiag(0,0,s*.5,s*.85,false,tk); break;
+    case 'O': addArc(0,0,s*.42,0,TAU); addBG(0,0,s*.26); break;
+    case 'P': addRect(-s*.22,0,tk,s*.85); addArc(-s*.02,-s*.2,s*.3,-HALF_PI,HALF_PI); break;
+    case 'Q': addArc(0,0,s*.42,0,TAU); addBG(0,0,s*.26); addRect(s*.22,s*.24,tk,s*.3); break;
+    case 'R': addRect(-s*.22,0,tk,s*.85); addArc(-s*.02,-s*.2,s*.3,-HALF_PI,HALF_PI); addTri(0,s*.15,s*.4,s*.45,'rd'); break;
+    case 'S': addArc(s*.02,-s*.19,s*.28,2.76,TAU); addArc(-s*.02,s*.19,s*.28,-.38,PI+.38); break;
+    case 'T': addRect(0,s*.08,tk*rand(.8,1.4),s*.75); addRect(0,-s*.36,s*.65,tk); break;
+    case 'U': addRect(-s*.22,-s*.1,tk,s*.7); addRect(s*.22,-s*.1,tk,s*.7); addArc(0,s*.22,s*.3,0,PI); break;
+    case 'V': addTri(0,s*.05,s*.65,s*.85,'dn'); break;
+    case 'W': addTri(-s*.2,s*.05,s*.38,s*.85,'dn'); addTri(s*.2,s*.05,s*.38,s*.85,'dn'); addBG(0,s*.18,s*.3); break;
+    case 'X': addDiag(0,0,s*.65,s*.85,false,tk*1.1); addDiag(0,0,s*.65,s*.85,true,tk*1.1); break;
+    case 'Y': addRect(0,s*.22,tk*rand(.8,1.4),s*.5); addTri(-s*.12,-s*.2,s*.32,s*.5,'rd'); addTri(s*.12,-s*.2,s*.32,s*.5,'ld'); break;
+    case 'Z': addRect(0,-s*.36,s*.6,tk); addRect(0,s*.36,s*.6,tk); addDiag(0,0,s*.58,s*.72,true,tk); break;
+    default: if(ch!==' ') addCirc(0,s*.3,s*.08); break;
+  }
+  // noise dot
+  if(rand(0,1)>.5){ let nc=pal[randInt(pal.length)]; parts.push({t:'circ',ox:rand(-s*.3,s*.3),oy:rand(-s*.3,s*.3),r:s*rand(.04,.14),col:[nc[0],nc[1],nc[2],50]}); }
+
+  // draw parts
+  ctx.save();
+  ctx.translate(pos.x, pos.y);
+  ctx.transform(1, 0, Math.tan(lean), 1, 0, 0);
+  if (flipH) ctx.scale(-1, 1);
+
+  for (let p of parts) {
+    ctx.save();
+    ctx.translate(p.ox, p.oy);
+    const c = p.col;
+    const alpha = c.length === 4 ? c[3]/255 : 1;
+    ctx.globalAlpha = alpha;
+
+    if (p.t === 'rect') {
+      ctx.rotate(p.rot || 0);
+      ctx.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
+      ctx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
+    } else if (p.t === 'circ') {
+      ctx.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
+      ctx.beginPath(); ctx.arc(0, 0, p.r, 0, Math.PI*2); ctx.fill();
+    } else if (p.t === 'arc') {
+      ctx.strokeStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
+      ctx.lineWidth = Math.max(p.r*.36, 4);
+      ctx.lineCap = 'square';
+      ctx.beginPath(); ctx.arc(0, 0, p.r, p.a1, p.a2); ctx.stroke();
+    } else if (p.t === 'tri') {
+      ctx.rotate(p.rot || 0);
+      ctx.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
+      const w=p.w, h=p.h;
+      ctx.beginPath();
+      if      (p.dir==='up') { ctx.moveTo(-w/2,h/2); ctx.lineTo(w/2,h/2); ctx.lineTo(0,-h/2); }
+      else if (p.dir==='dn') { ctx.moveTo(-w/2,-h/2); ctx.lineTo(w/2,-h/2); ctx.lineTo(0,h/2); }
+      else if (p.dir==='ru') { ctx.moveTo(0,h/2); ctx.lineTo(0,-h/2); ctx.lineTo(w,h/2); }
+      else if (p.dir==='rd') { ctx.moveTo(0,-h/2); ctx.lineTo(w,h/2); ctx.lineTo(0,h/2); }
+      else if (p.dir==='ld') { ctx.moveTo(0,-h/2); ctx.lineTo(-w,h/2); ctx.lineTo(0,h/2); }
+      ctx.closePath(); ctx.fill();
+    } else if (p.t === 'diag') {
+      ctx.strokeStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
+      ctx.lineWidth = p.sw; ctx.lineCap = 'square';
+      ctx.beginPath();
+      if (p.rev) { ctx.moveTo(p.w/2,-p.h/2); ctx.lineTo(-p.w/2,p.h/2); }
+      else       { ctx.moveTo(-p.w/2,-p.h/2); ctx.lineTo(p.w/2,p.h/2); }
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+  ctx.restore();
+}
+</script>
+</body>
+</html>
