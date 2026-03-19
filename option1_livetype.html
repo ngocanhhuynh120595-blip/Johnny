@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Deconstructive Type — Live</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#14121a; overflow:hidden; }
+  canvas { display:block; }
+</style>
+</head>
+<body>
+<script>
+const PAL = [
+  [220, 75,  65],
+  [75,  155, 105],
+  [230, 185, 50],
+  [45,  55,  75],
+  [130, 130, 130],
+  [235, 235, 230],
+];
+const BG = [20, 18, 24];
+
+let glyphs = [];
+let curX = 60, curY = 120;
+const BASE = 80;
+const LINE_H = 110;
+let blink = 0;
+
+function setup() {
+  createCanvas(windowWidth, windowHeight);
+}
+
+function draw() {
+  background(...BG);
+  for (let g of glyphs) g.draw();
+
+  // cursor
+  blink++;
+  if (blink % 60 < 30) {
+    fill(220, 75, 65);
+    noStroke();
+    rect(curX, curY - BASE * 0.72, 3, BASE * 0.85);
+  }
+
+  fill(80, 78, 88);
+  noStroke();
+  textAlign(LEFT);
+  textSize(11);
+  text('type anything  /  backspace  /  enter for newline  /  esc to clear', 20, height - 14);
+}
+
+function keyPressed() {
+  if (keyCode === ESCAPE) {
+    glyphs = [];
+    curX = 60; curY = 120;
+    return false;
+  }
+  if (keyCode === BACKSPACE) {
+    if (glyphs.length > 0) {
+      let last = glyphs.pop();
+      curX = last.x; curY = last.y;
+    }
+    return false;
+  }
+  if (keyCode === ENTER) {
+    curX = 60; curY += LINE_H;
+    if (curY > height - 80) { curY = 120; glyphs = []; }
+    return false;
+  }
+}
+
+function keyTyped() {
+  let ch = key.toUpperCase();
+  if (key.charCodeAt(0) < 32) return;
+
+  let sz  = BASE * r(0.75, 1.3);
+  let col = PAL[Math.floor(r(0, PAL.length))];
+  glyphs.push(new Glyph(curX, curY, ch, sz, col));
+  curX += sz * r(0.52, 0.76);
+  if (curX > width - 80) { curX = 60; curY += LINE_H; }
+}
+
+// ─── helpers ──────────────────────────────────────────────
+function r(a, b) { return Math.random() * (b - a) + a; }
+function ri(arr) { return arr[Math.floor(r(0, arr.length))]; }
+function vary(col) {
+  return [
+    constrain(col[0] + r(-25, 25), 0, 255),
+    constrain(col[1] + r(-25, 25), 0, 255),
+    constrain(col[2] + r(-25, 25), 0, 255),
+    r(160, 255)
+  ];
+}
+
+// ─── Glyph ────────────────────────────────────────────────
+class Glyph {
+  constructor(x, y, ch, sz, col) {
+    this.x = x; this.y = y; this.ch = ch; this.sz = sz; this.col = col;
+    this.lean  = r(-0.3, 0.3);
+    this.flipH = Math.random() > 0.88;
+    this.born  = millis();
+    this.parts = [];
+    this.build();
+  }
+
+  j() { return r(-this.sz * 0.08, this.sz * 0.08); }
+  v() { return vary(this.col); }
+
+  // add helpers
+  addRect(ox, oy, w, h)         { this.parts.push({ t:'rect',   ox:ox+this.j(), oy:oy+this.j(), w, h, rot:r(-0.2,0.2), col:this.v() }); }
+  addCirc(ox, oy, r2, col)      { this.parts.push({ t:'circ',   ox:ox+this.j(), oy:oy+this.j(), r:r2, col: col || this.v() }); }
+  addTri(ox, oy, w, h, dir)     { this.parts.push({ t:'tri',    ox:ox+this.j(), oy:oy+this.j(), w, h, dir, rot:r(-0.18,0.18), col:this.v() }); }
+  addArc(ox, oy, rad, a1, a2)   { this.parts.push({ t:'arc',    ox:ox+this.j(), oy:oy+this.j(), r:rad, a1, a2, col:this.v() }); }
+  addDiag(ox,oy,w,h,rev,sw)     { this.parts.push({ t:'diag',   ox:ox+this.j(), oy:oy+this.j(), w, h, rev:!!rev, sw, col:this.v() }); }
+  addBG(ox, oy, r2)             { this.parts.push({ t:'circ',   ox, oy, r:r2, col:[...BG, 255] }); }
+
+  build() {
+    const s = this.sz, tk = s * 0.17;
+    switch(this.ch) {
+      case 'A': this.addTri(0,0,s*.72,s*.88,'up'); this.addRect(0,s*.12,s*.42,tk); break;
+      case 'B': this.addRect(-s*.2,0,tk,s*.85); this.addArc(-s*.02,-s*.22,s*.29,-HALF_PI,HALF_PI); this.addArc(-s*.02,s*.18,s*.33,-HALF_PI,HALF_PI); break;
+      case 'C': this.addArc(0,0,s*.4,0.65,TAU-0.65); break;
+      case 'D': this.addRect(-s*.2,0,tk,s*.85); this.addArc(0,0,s*.42,-HALF_PI,HALF_PI); break;
+      case 'E': this.addRect(-s*.2,0,tk,s*.85); this.addRect(s*.06,-s*.36,s*.42,tk); this.addRect(s*.04,0,s*r(.22,.38),tk); this.addRect(s*.06,s*.36,s*.42,tk); break;
+      case 'F': this.addRect(-s*.2,0,tk,s*.85); this.addRect(s*.06,-s*.36,s*.4,tk); this.addRect(s*.04,0,s*r(.2,.36),tk); break;
+      case 'G': this.addArc(0,0,s*.4,0.52,TAU-0.26); this.addRect(s*.14,s*.04,s*.2,tk); break;
+      case 'H': this.addRect(-s*.22,0,tk,s*.85); this.addRect(s*.22,0,tk,s*.85); this.addRect(0,r(-s*.1,s*.1),s*.44,tk); break;
+      case 'I': this.addRect(0,0,tk*r(.8,1.5),s*.85); if(Math.random()>.3) this.addRect(0,-s*.36,s*.3,tk); if(Math.random()>.3) this.addRect(0,s*.36,s*r(.2,.38),tk); break;
+      case 'J': this.addRect(s*.1,-s*.12,tk,s*.7); this.addArc(0,s*.22,s*.24,0,PI); break;
+      case 'K': this.addRect(-s*.22,0,tk,s*.85); this.addTri(s*.05,-s*.22,s*.4,s*.44,'ru'); this.addTri(s*.05,s*.22,s*.4,s*.44,'rd'); break;
+      case 'L': this.addRect(-s*.15,0,tk,s*.85); this.addRect(s*.08,s*.36,s*.45,tk); break;
+      case 'M': this.addRect(-s*.28,0,tk,s*.85); this.addRect(s*.28,0,tk,s*.85); this.addTri(-s*.1,-s*.1,s*.28,s*.44,'rd'); this.addTri(s*.1,-s*.1,s*.28,s*.44,'ld'); break;
+      case 'N': this.addRect(-s*.22,0,tk,s*.85); this.addRect(s*.22,0,tk,s*.85); this.addDiag(0,0,s*.5,s*.85,false,tk); break;
+      case 'O': this.addArc(0,0,s*.42,0,TAU); this.addBG(0,0,s*.26); break;
+      case 'P': this.addRect(-s*.22,0,tk,s*.85); this.addArc(-s*.02,-s*.2,s*.3,-HALF_PI,HALF_PI); break;
+      case 'Q': this.addArc(0,0,s*.42,0,TAU); this.addBG(0,0,s*.26); this.addRect(s*.22,s*.24,tk,s*.3); break;
+      case 'R': this.addRect(-s*.22,0,tk,s*.85); this.addArc(-s*.02,-s*.2,s*.3,-HALF_PI,HALF_PI); this.addTri(0,s*.15,s*.4,s*.45,'rd'); break;
+      case 'S': this.addArc(s*.02,-s*.19,s*.28,2.76,TAU); this.addArc(-s*.02,s*.19,s*.28,-0.38,PI+0.38); break;
+      case 'T': this.addRect(0,s*.08,tk*r(.8,1.4),s*.75); this.addRect(0,-s*.36,s*.65,tk); break;
+      case 'U': this.addRect(-s*.22,-s*.1,tk,s*.7); this.addRect(s*.22,-s*.1,tk,s*.7); this.addArc(0,s*.22,s*.3,0,PI); break;
+      case 'V': this.addTri(0,s*.05,s*.65,s*.85,'dn'); break;
+      case 'W': this.addTri(-s*.2,s*.05,s*.38,s*.85,'dn'); this.addTri(s*.2,s*.05,s*.38,s*.85,'dn'); this.parts.push({t:'circ',ox:0,oy:s*.18,r:s*.28,col:[...BG,255]}); break;
+      case 'X': this.addDiag(0,0,s*.65,s*.85,false,tk*1.1); this.addDiag(0,0,s*.65,s*.85,true,tk*1.1); break;
+      case 'Y': this.addRect(0,s*.22,tk*r(.8,1.4),s*.5); this.addTri(-s*.12,-s*.2,s*.32,s*.5,'rd'); this.addTri(s*.12,-s*.2,s*.32,s*.5,'ld'); break;
+      case 'Z': this.addRect(0,-s*.36,s*.6,tk); this.addRect(0,s*.36,s*.6,tk); this.addDiag(0,0,s*.58,s*.72,true,tk); break;
+      default:
+        if (this.ch !== ' ') this.addCirc(0, s*.3, s*.08);
+        break;
+    }
+    // deconstructive noise dot
+    if (Math.random() > 0.5) {
+      let nc = ri(PAL);
+      this.parts.push({ t:'circ', ox:r(-s*.3,s*.3), oy:r(-s*.3,s*.3), r:s*r(.04,.14), col:[nc[0],nc[1],nc[2],50] });
+    }
+  }
+
+  draw() {
+    let age = (millis() - this.born) / 180;
+    let sc  = min(1, age);
+
+    push();
+    translate(this.x, this.y);
+    // lean (shear x)
+    applyMatrix(1, 0, Math.tan(this.lean), 1, 0, 0);
+    if (this.flipH) scale(-1, 1);
+    scale(sc);
+
+    for (let p of this.parts) drawPart(p);
+    pop();
+  }
+}
+
+// ─── drawPart ─────────────────────────────────────────────
+function drawPart(p) {
+  push();
+  translate(p.ox, p.oy);
+
+  let c = p.col;
+  if (c.length === 4) fill(c[0], c[1], c[2], c[3]);
+  else                fill(c[0], c[1], c[2]);
+  noStroke();
+
+  if (p.t === 'rect') {
+    rotate(p.rot || 0);
+    rectMode(CENTER);
+    rect(0, 0, p.w, p.h);
+
+  } else if (p.t === 'circ') {
+    ellipseMode(CENTER);
+    ellipse(0, 0, p.r * 2, p.r * 2);
+
+  } else if (p.t === 'arc') {
+    noFill();
+    stroke(c[0], c[1], c[2], c[3] || 255);
+    strokeWeight(max(p.r * 0.36, 4));
+    strokeCap(SQUARE);
+    arc(0, 0, p.r * 2, p.r * 2, p.a1, p.a2);
+    noStroke();
+
+  } else if (p.t === 'tri') {
+    rotate(p.rot || 0);
+    const w = p.w, h = p.h;
+    if      (p.dir === 'up') triangle(-w/2, h/2, w/2, h/2, 0, -h/2);
+    else if (p.dir === 'dn') triangle(-w/2,-h/2, w/2,-h/2, 0,  h/2);
+    else if (p.dir === 'ru') triangle(0, h/2, 0,-h/2, w, h/2);
+    else if (p.dir === 'rd') triangle(0,-h/2, w, h/2, 0, h/2);
+    else if (p.dir === 'ld') triangle(0,-h/2,-w, h/2, 0, h/2);
+
+  } else if (p.t === 'diag') {
+    stroke(c[0], c[1], c[2], c[3] || 255);
+    strokeWeight(p.sw);
+    strokeCap(SQUARE);
+    if (p.rev) line( p.w/2,-p.h/2,-p.w/2, p.h/2);
+    else       line(-p.w/2,-p.h/2, p.w/2, p.h/2);
+    noStroke();
+  }
+  pop();
+}
+</script>
+</body>
+</html>
