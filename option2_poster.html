@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Deconstructive Type — Poster</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { overflow:hidden; }
+  canvas { display:block; }
+</style>
+</head>
+<body>
+<script>
+const PALETTE_SETS = [
+  // Dark industrial
+  { bg:[20,18,24],  pal:[[220,75,65],[45,55,75],[130,130,130],[235,235,230],[75,155,105]] },
+  // Risograph
+  { bg:[240,234,216], pal:[[200,55,45],[30,55,100],[230,185,50],[80,155,105],[40,38,42]] },
+  // Concrete
+  { bg:[182,177,172], pal:[[38,36,40],[158,52,42],[218,213,203],[78,73,70],[200,80,65]] },
+  // Night neon
+  { bg:[10,8,22],   pal:[[255,55,115],[35,215,175],[218,188,255],[255,198,48],[180,100,255]] },
+];
+
+let BG, PAL;
+let pIdx = 0;
+let glyphs = [];
+let inputBuf = '';
+let isTyping = true;
+let layoutMode = 0;
+let seedVal = 1234;
+let blink = 0;
+
+function setup() {
+  createCanvas(windowWidth, windowHeight);
+  setPalette(0);
+}
+
+function draw() {
+  if (isTyping) { drawPrompt(); return; }
+  background(...BG);
+  for (let g of glyphs) g.draw();
+  drawHUD();
+}
+
+function setPalette(i) {
+  pIdx = i % PALETTE_SETS.length;
+  BG  = PALETTE_SETS[pIdx].bg;
+  PAL = PALETTE_SETS[pIdx].pal;
+}
+
+function drawPrompt() {
+  background(...BG);
+  // grid
+  stroke(BG[0]+18, BG[1]+18, BG[2]+18);
+  strokeWeight(0.5);
+  for (let x=0; x<width; x+=44) line(x,0,x,height);
+  for (let y=0; y<height; y+=44) line(0,y,width,y);
+  noStroke();
+
+  let fg = PAL[0];
+  fill(...fg);
+  textAlign(CENTER, CENTER);
+  textSize(11);
+  text('D E C O N S T R U C T I V E   T Y P E', width/2, height/2 - 72);
+  textSize(26);
+  blink++;
+  text(inputBuf + (blink%60 < 30 ? '|' : ''), width/2, height/2);
+  textSize(10);
+  fill(fg[0],fg[1],fg[2],110);
+  text('type · enter to generate · R new layout · S save', width/2, height/2 + 65);
+}
+
+function drawHUD() {
+  const names = ['CHAOS GRID','DIAGONAL','EXPLOSION','STACK'];
+  fill(BG[0]+22,BG[1]+22,BG[2]+22);
+  noStroke();
+  rect(0, height-28, width, 28);
+  fill(...PAL[0]);
+  textAlign(LEFT); textSize(10);
+  text('LAYOUT: '+names[layoutMode]+'  ·  R new  ·  S save  ·  ESC back', 15, height-10);
+  textAlign(RIGHT);
+  text('DECONSTRUCTIVE TYPE', width-15, height-10);
+}
+
+function keyPressed() {
+  if (!isTyping) {
+    if (key === 'r' || key === 'R') { layoutMode=(layoutMode+1)%4; seedVal=Math.floor(Math.random()*99999); generate(); }
+    if (key === 's' || key === 'S') saveCanvas('poster','png');
+    if (keyCode===ESCAPE||keyCode===BACKSPACE) { isTyping=true; setPalette((pIdx+1)%4); }
+    return false;
+  }
+  if (keyCode===ESCAPE){key=0;return false;}
+  if (keyCode===BACKSPACE && inputBuf.length>0){ inputBuf=inputBuf.slice(0,-1); return false; }
+  if (keyCode===ENTER && inputBuf.trim().length>0) {
+    isTyping=false;
+    seedVal=Math.floor(Math.random()*99999);
+    generate();
+    return false;
+  }
+}
+function keyTyped() {
+  if (isTyping && inputBuf.length < 20 && key.charCodeAt(0)>=32) {
+    inputBuf += key;
+  }
+}
+
+function generate() {
+  randomSeed(seedVal);
+  glyphs = [];
+  let chars = inputBuf.trim().toUpperCase().split('');
+  if (chars.length === 0) return;
+  if      (layoutMode===0) layoutGrid(chars);
+  else if (layoutMode===1) layoutDiag(chars);
+  else if (layoutMode===2) layoutExplode(chars);
+  else                     layoutStack(chars);
+}
+
+function layoutGrid(chars) {
+  let n=chars.length, cols=ceil(sqrt(n*1.2)), rows=ceil(n/cols);
+  let cw=width*.88/cols, ch=(height-32)*.84/rows;
+  let base=min(cw,ch)*random(.72,1.1);
+  let sx=width*.06+cw*.5, sy=height*.08+ch*.5;
+  for(let i=0;i<n;i++){
+    let col=i%cols, row=floor(i/cols);
+    let cx=sx+col*cw+random(-cw*.28,cw*.28);
+    let cy=sy+row*ch+random(-ch*.22,ch*.22);
+    let sz=base*random(.55,1.55);
+    glyphs.push(new Glyph(chars[i],cx,cy,sz,PAL[floor(random(PAL.length))]));
+  }
+}
+function layoutDiag(chars) {
+  let n=chars.length;
+  let spacing=width*1.05/max(n,1), base=min(spacing*1.3,140);
+  for(let i=0;i<n;i++){
+    let t=n>1?i/(n-1):0.5;
+    let cx=55+i*spacing+random(-18,18);
+    let cy=height*.16+t*height*.65+random(-28,28);
+    let sz=base*random(.45,1.65);
+    glyphs.push(new Glyph(chars[i],cx,cy,sz,PAL[floor(random(PAL.length))]));
+  }
+}
+function layoutExplode(chars) {
+  let n=chars.length;
+  for(let i=0;i<n;i++){
+    let angle=TWO_PI*i/n+random(-.4,.4);
+    let rad=random(70,min(width,height)*.35);
+    let cx=width/2+cos(angle)*rad;
+    let cy=(height-28)/2+sin(angle)*rad;
+    let sz=100*random(.45,1.85);
+    glyphs.push(new Glyph(chars[i],cx,cy,sz,PAL[floor(random(PAL.length))]));
+  }
+}
+function layoutStack(chars) {
+  let n=chars.length, cols=max(1,min(4,n));
+  let cw=width/cols, colY=[];
+  for(let i=0;i<cols;i++) colY.push(80);
+  for(let i=0;i<n;i++){
+    let col=i%cols, sz=cw*random(.38,1.28);
+    let cx=cw*col+cw/2+random(-cw*.08,cw*.08);
+    let cy=colY[col]+sz*.55;
+    colY[col]+=sz*random(.82,1.12);
+    glyphs.push(new Glyph(chars[i],cx,cy,sz,PAL[floor(random(PAL.length))]));
+  }
+}
+
+// ─── Glyph ────────────────────────────────────────────────
+class Glyph {
+  constructor(ch, x, y, sz, col) {
+    this.ch=ch; this.x=x; this.y=y; this.sz=sz; this.col=col;
+    this.lean=random(-.42,.42);
+    this.flipH=random(1)>.84;
+    this.parts=[];
+    this.build();
+  }
+  j() { return random(-this.sz*.09, this.sz*.09); }
+  v() {
+    let c=this.col;
+    return [constrain(c[0]+random(-28,28),0,255),constrain(c[1]+random(-28,28),0,255),constrain(c[2]+random(-28,28),0,255),random(155,255)];
+  }
+  addRect(ox,oy,w,h)       { this.parts.push({t:'rect',ox:ox+this.j(),oy:oy+this.j(),w,h,rot:random(-.22,.22),col:this.v()}); }
+  addCirc(ox,oy,r,col)     { this.parts.push({t:'circ',ox:ox+this.j(),oy:oy+this.j(),r,col:col||this.v()}); }
+  addTri(ox,oy,w,h,dir)    { this.parts.push({t:'tri',ox:ox+this.j(),oy:oy+this.j(),w,h,dir,rot:random(-.2,.2),col:this.v()}); }
+  addArc(ox,oy,rad,a1,a2)  { this.parts.push({t:'arc',ox:ox+this.j(),oy:oy+this.j(),r:rad,a1,a2,col:this.v()}); }
+  addDiag(ox,oy,w,h,rev,sw){ this.parts.push({t:'diag',ox:ox+this.j(),oy:oy+this.j(),w,h,rev:!!rev,sw,col:this.v()}); }
+  addBG(ox,oy,r)           { this.parts.push({t:'circ',ox,oy,r,col:[...BG,255]}); }
+
+  build() {
+    const s=this.sz, tk=s*.17;
+    switch(this.ch){
+      case 'A': this.addTri(0,0,s*.72,s*.88,'up'); this.addRect(0,s*.12,s*.42,tk); break;
+      case 'B': this.addRect(-s*.2,0,tk,s*.85); this.addArc(-s*.02,-s*.22,s*.29,-HALF_PI,HALF_PI); this.addArc(-s*.02,s*.18,s*.33,-HALF_PI,HALF_PI); break;
+      case 'C': this.addArc(0,0,s*.4,0.65,TAU-0.65); break;
+      case 'D': this.addRect(-s*.2,0,tk,s*.85); this.addArc(0,0,s*.42,-HALF_PI,HALF_PI); break;
+      case 'E': this.addRect(-s*.2,0,tk,s*.85); this.addRect(s*.06,-s*.36,s*.42,tk); this.addRect(s*.04,0,s*random(.22,.38),tk); this.addRect(s*.06,s*.36,s*.42,tk); break;
+      case 'F': this.addRect(-s*.2,0,tk,s*.85); this.addRect(s*.06,-s*.36,s*.4,tk); this.addRect(s*.04,0,s*random(.2,.36),tk); break;
+      case 'G': this.addArc(0,0,s*.4,.52,TAU-.26); this.addRect(s*.14,s*.04,s*.2,tk); break;
+      case 'H': this.addRect(-s*.22,0,tk,s*.85); this.addRect(s*.22,0,tk,s*.85); this.addRect(0,random(-s*.1,s*.1),s*.44,tk); break;
+      case 'I': this.addRect(0,0,tk*random(.8,1.5),s*.85); if(random(1)>.3)this.addRect(0,-s*.36,s*.3,tk); if(random(1)>.3)this.addRect(0,s*.36,s*random(.2,.38),tk); break;
+      case 'J': this.addRect(s*.1,-s*.12,tk,s*.7); this.addArc(0,s*.22,s*.24,0,PI); break;
+      case 'K': this.addRect(-s*.22,0,tk,s*.85); this.addTri(s*.05,-s*.22,s*.4,s*.44,'ru'); this.addTri(s*.05,s*.22,s*.4,s*.44,'rd'); break;
+      case 'L': this.addRect(-s*.15,0,tk,s*.85); this.addRect(s*.08,s*.36,s*.45,tk); break;
+      case 'M': this.addRect(-s*.28,0,tk,s*.85); this.addRect(s*.28,0,tk,s*.85); this.addTri(-s*.1,-s*.1,s*.28,s*.44,'rd'); this.addTri(s*.1,-s*.1,s*.28,s*.44,'ld'); break;
+      case 'N': this.addRect(-s*.22,0,tk,s*.85); this.addRect(s*.22,0,tk,s*.85); this.addDiag(0,0,s*.5,s*.85,false,tk); break;
+      case 'O': this.addArc(0,0,s*.42,0,TAU); this.addBG(0,0,s*.26); break;
+      case 'P': this.addRect(-s*.22,0,tk,s*.85); this.addArc(-s*.02,-s*.2,s*.3,-HALF_PI,HALF_PI); break;
+      case 'Q': this.addArc(0,0,s*.42,0,TAU); this.addBG(0,0,s*.26); this.addRect(s*.22,s*.24,tk,s*.3); break;
+      case 'R': this.addRect(-s*.22,0,tk,s*.85); this.addArc(-s*.02,-s*.2,s*.3,-HALF_PI,HALF_PI); this.addTri(0,s*.15,s*.4,s*.45,'rd'); break;
+      case 'S': this.addArc(s*.02,-s*.19,s*.28,2.76,TAU); this.addArc(-s*.02,s*.19,s*.28,-.38,PI+.38); break;
+      case 'T': this.addRect(0,s*.08,tk*random(.8,1.4),s*.75); this.addRect(0,-s*.36,s*.65,tk); break;
+      case 'U': this.addRect(-s*.22,-s*.1,tk,s*.7); this.addRect(s*.22,-s*.1,tk,s*.7); this.addArc(0,s*.22,s*.3,0,PI); break;
+      case 'V': this.addTri(0,s*.05,s*.65,s*.85,'dn'); break;
+      case 'W': this.addTri(-s*.2,s*.05,s*.38,s*.85,'dn'); this.addTri(s*.2,s*.05,s*.38,s*.85,'dn'); this.addBG(0,s*.18,s*.3); break;
+      case 'X': this.addDiag(0,0,s*.65,s*.85,false,tk*1.1); this.addDiag(0,0,s*.65,s*.85,true,tk*1.1); break;
+      case 'Y': this.addRect(0,s*.22,tk*random(.8,1.4),s*.5); this.addTri(-s*.12,-s*.2,s*.32,s*.5,'rd'); this.addTri(s*.12,-s*.2,s*.32,s*.5,'ld'); break;
+      case 'Z': this.addRect(0,-s*.36,s*.6,tk); this.addRect(0,s*.36,s*.6,tk); this.addDiag(0,0,s*.58,s*.72,true,tk); break;
+      default: if(this.ch!==' ') this.addCirc(0,s*.3,s*.08); break;
+    }
+    // noise
+    if(random(1)>.5){let nc=PAL[floor(random(PAL.length))]; this.parts.push({t:'circ',ox:random(-s*.3,s*.3),oy:random(-s*.3,s*.3),r:s*random(.04,.14),col:[nc[0],nc[1],nc[2],50]});}
+  }
+
+  draw() {
+    push();
+    translate(this.x, this.y);
+    applyMatrix(1,0,Math.tan(this.lean),1,0,0);
+    if(this.flipH) scale(-1,1);
+    for(let p of this.parts) drawPart(p);
+    pop();
+  }
+}
+
+function drawPart(p) {
+  push();
+  translate(p.ox, p.oy);
+  let c=p.col;
+  if(c.length===4) fill(c[0],c[1],c[2],c[3]); else fill(c[0],c[1],c[2]);
+  noStroke();
+
+  if(p.t==='rect'){
+    rotate(p.rot||0); rectMode(CENTER); rect(0,0,p.w,p.h);
+  } else if(p.t==='circ'){
+    ellipseMode(CENTER); ellipse(0,0,p.r*2,p.r*2);
+  } else if(p.t==='arc'){
+    noFill(); stroke(c[0],c[1],c[2],c[3]||255);
+    strokeWeight(max(p.r*.36,4)); strokeCap(SQUARE);
+    arc(0,0,p.r*2,p.r*2,p.a1,p.a2); noStroke();
+  } else if(p.t==='tri'){
+    rotate(p.rot||0);
+    let w=p.w,h=p.h;
+    if     (p.dir==='up') triangle(-w/2,h/2,w/2,h/2,0,-h/2);
+    else if(p.dir==='dn') triangle(-w/2,-h/2,w/2,-h/2,0,h/2);
+    else if(p.dir==='ru') triangle(0,h/2,0,-h/2,w,h/2);
+    else if(p.dir==='rd') triangle(0,-h/2,w,h/2,0,h/2);
+    else if(p.dir==='ld') triangle(0,-h/2,-w,h/2,0,h/2);
+  } else if(p.t==='diag'){
+    stroke(c[0],c[1],c[2],c[3]||255);
+    strokeWeight(p.sw); strokeCap(SQUARE);
+    if(p.rev) line(p.w/2,-p.h/2,-p.w/2,p.h/2);
+    else      line(-p.w/2,-p.h/2,p.w/2,p.h/2);
+    noStroke();
+  }
+  pop();
+}
+</script>
+</body>
+</html>
